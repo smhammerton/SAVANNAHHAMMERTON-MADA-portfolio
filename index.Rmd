@@ -1,15 +1,15 @@
 ---
-title: "My website and data analysis portfolio"
+title: "My Website and Data Analysis Portfolio"
 output: 
   html_document:
     toc: FALSE
 ---
 
-# Hello
+# **Hello**
 
-### And hello again
+### And welcome!
 
-Welcome to **my website** and _data analysis portfolio._ 
+Welcome to my website and data analysis portfolio.
 
 
 * Please use the `Menu Bar` above to look around.
