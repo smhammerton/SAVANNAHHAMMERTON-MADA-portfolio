@@ -1,10 +1,156 @@
 ---
-title: "R coding Exercise"
+title: "R Coding Exercise"
 output: 
   html_document:
     toc: FALSE
 ---
 
-This will contain the future R coding exercise.
+
+## Loading and checking the data
+I first loaded the needed packages - **dslabs** to access the _gapminder_ data and **tidyverse** to process the data and create plots. 
+
+I then loaded the help page for _gapminder_ and asked for the structure, summary, and class. 
+
+```{r Loading and checking the data, message=FALSE, warning=FALSE}
+#Load the dslabs and other required packages
+#dslabs is required to access the gapminder data 
+library(dslabs)
+#tidyverse is used in data processing and tidying and in plotting 
+library(tidyverse)
+
+#Look at the help file for the gapminder data
+help(gapminder)
+
+#Get an overview of the data structure
+str(gapminder)
+
+#Get a summary of the data
+summary(gapminder)
+
+#Determine the type of object gapminder is
+class(gapminder)
+```
+
+## Processing the data 
+
+My first step was creating the new _africadata_ object by filtering the _gapminder_ dataset. I used only the rows for which the continent was **Africa**. I then checked the structure and summary of the new object. 
+
+I then created two additional objects from _africadata_, one containing only infant mortality and life expectancy data, and the other containing only population and life expectancy data. I checked the structures and summaries of these as well. 
+
+```{r Processing the data}
+# Create a new object, "africadata," that contains only the data from African countries, by extracting only the rows from gapminder in which the continent is "Africa"
+africadata <-
+  gapminder %>%
+  filter(continent == 'Africa') 
+
+#Check the structure and summary of the data 
+str(africadata)
+summary(africadata)
+
+#Create an object containing only infant_mortality and life_expectancy data within the africadata object 
+v1 <- select(africadata, infant_mortality, life_expectancy)
+
+#Create an object containing only population and life_expectancy data within the africadata object
+v2 <- select(africadata, population, life_expectancy)
+
+#Check the structure and summary of the two new objects  
+str(v1)
+summary(v1)
+str(v2)
+summary(v2)
+```
+
+## Plotting 
+
+I created plots for each of the two new objects I created from _africadata_. Both had Life Expectancy as the outcome, while the first had infant mortality as the predictor and the second had the log population size as the predictor. 
+```{r Plotting}
+#Plot life expectancy as a function of infant mortality 
+v1 %>%
+  ggplot(aes(infant_mortality, life_expectancy)) +
+  geom_point() +
+  xlab('Infant Mortality') +
+  ylab('Life Expectancy')
+
+#Plot life expectancy as a function of the log population size 
+v2 %>%
+  ggplot(aes(population, life_expectancy)) +
+  scale_x_continuous(trans = 'log2') +
+  geom_point() +
+  xlab('Population (log scale)') +
+  ylab('Life Expectancy')
+```
+
+While these were scatter plots, they both had clusters of data points together that appeared almost linear. This was due to the data being collected over many different years. In order to tidy the data a little bit, the data was then restricted to one year. 
+
+## More data processing 
+
+In order to determine which year to use, I examined what years containing missing data (so that I would avoid using a year with missing data). 
+
+The year 2000 was then used to go through the same process as above, in both processing and plotting data. 
+
+```{r More data processing}
+#Look at which years have missing data for infant mortality 
+africadatana <-
+  africadata %>%
+  select(year, infant_mortality) %>%
+  filter(is.na(infant_mortality))
+#1960-1981 and 2016 have missing data 
+
+
+#Creat new object with only the data from the year 2000 in the africadata object
+africadata2000 <- 
+  filter(africadata, year == 2000)
+#View the structure and summary of the new africadata2000 object 
+str(africadata2000)
+summary(africadata2000)
+
+#Recreate v1 and v2 objects from the africa data in only the year 2000 
+#Create an object containing only infant_mortality and life_expectancy data within the africadata object 
+v1_2000 <- select(africadata2000, infant_mortality, life_expectancy)
+
+#Create an object containing only population and life_expectancy data within the africadata object
+v2_2000 <- select(africadata2000, population, life_expectancy)
+
+#Check the structure and summary of the two new objects  
+str(v1_2000)
+summary(v1_2000)
+str(v2_2000)
+summary(v2_2000)
+```
+
+## More plotting 
+```{r More plotting}
+#Recreate plots with year 2000 data 
+###Plot life expectancy as a function of infant mortality 
+v1_2000 %>%
+  ggplot(aes(infant_mortality, life_expectancy)) +
+  geom_point()
+
+###Plot life expectancy as a function of the log population size 
+v2_2000 %>%
+  ggplot(aes(population, life_expectancy)) +
+  scale_x_continuous(trans = 'log2') +
+  geom_point()
+```
+
+## A simple fit 
+
+The data was now much more readable. There certainly appeared to be an association between infant mortality and life expectancy, but not much of one (if any) between population size and life expectancy. To check these relationships, two simple linear models were fit, one to each relationship. 
+
+```{r A simple fit}
+#Fit linear models for the year 2000 data, with life expectancy as the outcome and infant mortality and population size as the predictors (separately), and save
+
+## Linear model with infant mortality predictor and life expectancy outcome
+fit1 <- lm(life_expectancy ~ infant_mortality, data = v1_2000)
+
+## Linear model with (log) population size predictor and life expectancy outcome 
+fit2 <- lm(life_expectancy ~ population, data = v2_2000)
+
+#View the summaries of the two linear models 
+summary(fit1)
+summary(fit2)
+```
+
+Based on the outcomes of the two models, I could conclude that increased infant mortality has a negative impact on life expectancy. That is, as infant mortality increases, life expectancy decreases (p < 0.00001). However, there did not appear to be a significant relationship between life expectancy and population size (p = 0.616). 
 
 
