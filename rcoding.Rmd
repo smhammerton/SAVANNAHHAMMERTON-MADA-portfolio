@@ -153,4 +153,71 @@ summary(fit2)
 
 Based on the outcomes of the two models, I could conclude that increased infant mortality has a negative impact on life expectancy. That is, as infant mortality increases, life expectancy decreases (p < 0.00001). However, there did not appear to be a significant relationship between life expectancy and population size (p = 0.616). 
 
+# Predicting life expectancy (by Zane!)
 
+The first thing I want to do here is make a spaghetti plot of how each country's life expectancy changes over the years. 
+
+```{r}
+africadata |>
+  ggplot(aes(year, life_expectancy)) +
+  geom_line(aes(color = country), alpha = 0.5, show.legend = FALSE) +
+  geom_smooth(method = "gam", color = "black") +
+  xlab('Infant Mortality') +
+  ylab('Life Expectancy') +
+  theme_bw()
+```
+
+Hmm, it looks like this relationship is not monotonic for several countries, and while there is a trend upwards overall, it is not necessarily linear. There is also a significant amount of variation in the trend, which is pretty normal for time series. There doesn't appear to be any seasonal/cyclic change, at least on the annual scale of measurement for which we have data.
+
+Let's color by region and see if we see any similar trends that could explain part of the country-level effect.
+
+```{r}
+africadata |>
+  ggplot(aes(year, life_expectancy)) +
+  geom_line(aes(color = country), show.legend = FALSE, alpha = 0.5) +
+  geom_smooth(method = "gam", color = "black") +
+  xlab('Infant Mortality') +
+  ylab('Life Expectancy') +
+  theme_bw() +
+  facet_wrap(vars(region))
+```
+
+Let's make a few more plots to see if we can observe any other relationships with life expectancy over time.
+
+```{r}
+africadata |>
+  mutate(`log10 population` = log10(population), `log10 gdp` = log10(gdp),
+         .keep = "unused") |>
+  pivot_longer(c(infant_mortality, fertility, `log10 population`,
+                 `log10 gdp`)) |>
+  ggplot(aes(year, value, color = life_expectancy, group = country)) +
+  geom_line(alpha = 0.7) +
+  scale_color_viridis_c(option = "plasma") +
+  theme_bw() +
+  coord_cartesian(expand = FALSE) +
+  facet_wrap(vars(name), scales = "free_y")
+```
+
+I won't try and make the argument that this is the best possible visualization for these data, but I think it is good enough to give us an idea of trends. Clearly, fertility and infant mortality vary with life expectancy across time. We can see this from how the curves trend over time, and how the pattern of colors shifts over time. However, while gdp and population size appear to vary with time, I do not think that they necessarily vary with life expectancy in the same way.
+
+Now since this is time series data, I think we are kind of obligated to plot either the pacf or acf, and I think the acf looks cooler, so let's make a plot of that.
+
+```{r}
+africadata %>%
+  select(country, year, life_expectancy) |>
+  tidyr::nest(data = -country) |>
+  dplyr::mutate(
+    pacf_res = purrr::map(data, ~acf(.x$life_expectancy, plot = F)),
+    pacf_val = purrr::map(pacf_res, ~data.frame(lag = .x$lag, acf = .x$acf))
+  ) |>
+  unnest(pacf_val) |>
+  dplyr::group_by(country) |>
+  dplyr::mutate(lag = seq(0, n() - 1)) |>
+  ggplot(aes(x = lag, y = acf)) +
+  geom_col() +
+  geom_hline(yintercept = c(qnorm(0.025) / sqrt(17), qnorm(0.975) / sqrt(17))) +
+  facet_wrap(vars(country)) +
+  theme_bw()
+```
+
+This plot has a lot of facets, but I think it is informative and I can't think of a way to make it look better.
