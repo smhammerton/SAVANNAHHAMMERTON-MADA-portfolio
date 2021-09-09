@@ -3,6 +3,8 @@ title: "R Coding Exercise"
 output: 
   html_document:
     toc: FALSE
+editor_options: 
+  chunk_output_type: console
 ---
 
 
@@ -17,6 +19,10 @@ I then loaded the help page for _gapminder_ and asked for the structure, summary
 library(dslabs)
 #tidyverse is used in data processing and tidying and in plotting 
 library(tidyverse)
+# gtsummary is for making nice regression tables in HTML output
+library(gtsummary)
+# For regression diagnostic plots
+library(ggfortify)
 
 #Look at the help file for the gapminder data
 help(gapminder)
@@ -153,4 +159,139 @@ summary(fit2)
 
 Based on the outcomes of the two models, I could conclude that increased infant mortality has a negative impact on life expectancy. That is, as infant mortality increases, life expectancy decreases (p < 0.00001). However, there did not appear to be a significant relationship between life expectancy and population size (p = 0.616). 
 
+# Predicting life expectancy (by Zane!)
 
+What I want to do in this section is fit a basic model to predict life expectancy by year.
+
+## EDA
+
+The first thing I want to do here is make a spaghetti plot of how each country's life expectancy changes over the years. 
+
+```{r}
+africadata |>
+  ggplot(aes(year, life_expectancy)) +
+  geom_line(aes(color = country), alpha = 0.5, show.legend = FALSE) +
+  geom_smooth(method = "gam", color = "black") +
+  xlab('Infant Mortality') +
+  ylab('Life Expectancy') +
+  theme_bw()
+```
+
+Hmm, it looks like this relationship is not monotonic for several countries, and while there is a trend upwards overall, it is not necessarily linear. There is also a significant amount of variation in the trend, which is pretty normal for time series. There doesn't appear to be any seasonal/cyclic change, at least on the annual scale of measurement for which we have data.
+
+Let's color by region and see if we see any similar trends that could explain part of the country-level effect.
+
+```{r}
+africadata |>
+  ggplot(aes(year, life_expectancy)) +
+  geom_line(aes(color = country), show.legend = FALSE, alpha = 0.5) +
+  geom_smooth(method = "gam", color = "black") +
+  xlab('Infant Mortality') +
+  ylab('Life Expectancy') +
+  theme_bw() +
+  facet_wrap(vars(region))
+```
+
+Let's make a few more plots to see if we can observe any other relationships with life expectancy over time.
+
+```{r}
+africadata |>
+  mutate(`log10 population` = log10(population), `log10 gdp` = log10(gdp),
+         .keep = "unused") |>
+  pivot_longer(c(infant_mortality, fertility, `log10 population`,
+                 `log10 gdp`)) |>
+  ggplot(aes(year, value, color = life_expectancy, group = country)) +
+  geom_line(alpha = 0.7) +
+  scale_color_viridis_c(option = "plasma") +
+  theme_bw() +
+  coord_cartesian(expand = FALSE) +
+  facet_wrap(vars(name), scales = "free_y")
+```
+
+I won't try and make the argument that this is the best possible visualization for these data, but I think it is good enough to give us an idea of trends. Clearly, fertility and infant mortality vary with life expectancy across time. We can see this from how the curves trend over time, and how the pattern of colors shifts over time. However, while gdp and population size appear to vary with time, I do not think that they necessarily vary with life expectancy in the same way.
+
+Now since this is time series data, I think we are kind of obligated to plot the autocorrelation, so let's make a plot of the partial autocorrelation (as this controls for previous lags, unlike the regular autocorrelation, and is thus easier to interpret).
+
+```{r}
+africadata %>%
+  select(country, year, life_expectancy) |>
+  tidyr::nest(data = -country) |>
+  dplyr::mutate(
+    pacf_res = purrr::map(data, ~pacf(.x$life_expectancy, plot = F, lag.max = 10)),
+    pacf_val = purrr::map(pacf_res, ~data.frame(lag = .x$lag, acf = .x$acf))
+  ) |>
+  unnest(pacf_val) |>
+  ggplot(aes(x = lag, y = acf)) +
+  geom_hline(yintercept = c(qnorm(0.025) / sqrt(17), qnorm(0.975) / sqrt(17)),
+             lty = 2, color = "gray", size = 1.5) +
+  geom_hline(yintercept = 0, size = 1.5) +
+  geom_line(aes(group = country, color = country), show.legend = FALSE) +
+  theme_bw(base_size = 20) +
+  scale_x_continuous(labels = 1:10, breaks = 1:10, minor_breaks = NULL) +
+  labs(x = "lag", y = "partial autocorrelation") +
+  ggtitle("Partial autocorrelation of life expectancy by year for each African country")
+```
+
+The dashed gray lines on this plot represent approximate normal 95% confidence bands. We see that all countries have a partial autocorrelation at the 1st lag which lies outside of the 95% confidence band, but at the 2nd lag, only one country has a value outside of the band. Since we are testing a larging amount of countries, I think we can safely say that this one second lag value is spurious. The interpretation of a significant first lag partial autocorrelation value (and no other significant partial autocorrelations) is that our time series can be modeled as an autoregressive process of order 1, AKA an AR(1) process.
+
+## Imputation
+
+Most time series models have no way to deal with missing data. There are a lot of ways we could deal with this, and in this case we could likely find another data source to fill in the missing values with real information. But I am too lazy to do that. So first, let's look at how much data is actually missing.
+
+```{r}
+africadata |>
+  select(!continent) |>
+  summarize(across(everything(), ~mean(is.na(.x)))) |>
+  pivot_longer(everything(), names_to = "field", values_to = "pct_m") |>
+  ggplot(aes(x = pct_m, y = forcats::fct_reorder(field, pct_m))) +
+  geom_col() +
+  geom_label(aes(label = scales::percent(round(pct_m, 2))), size = 10) +
+  theme_bw(base_size = 20) +
+  labs(x = "percent of records missing", y = NULL) +
+  scale_x_continuous(labels = scales::percent_format())
+```
+
+Well, the most missing values are in GDP, which did not appear to be a strong predictor anyways, so we can throw that one out. And then since infant mortality and fertility both have missingness less than 10%, for this simple example I think it will be fine to impute with the median, although in a real analysis something more complex might be better to reduce bias.
+
+```{r}
+modeldata <- africadata |>
+  dplyr::select(-continent, -gdp, -population) |>
+  dplyr::mutate(
+    across(c(infant_mortality, fertility),
+           ~dplyr::if_else(is.na(.x), median(.x, na.rm = TRUE), .x)
+           )
+  )
+```
+
+## Simple model fitting
+
+Now that the imputation is done, let's build a multivariable linear model. For this model we are going to ignore what we learned about the potentially autoregressive structure of the data :)
+
+Now we have been looking at this by country previously, but I think that including 50+ regression parameters is maybe a bit excessive. So let's group by region instead, which will give us a much more manageable number of regression coefficients. I don't know which region of Africa we sould select as the reference group, so I will let R use the default (which in this case is Eastern Africa).
+
+```{r}
+fit3 <- lm(life_expectancy ~ . - country, data = modeldata)
+fit3 |>
+  tbl_regression() |>
+  add_glance_source_note(
+    label = list(df  ~ "Degrees of Freedom", sigma ~ "\U03C3"),
+    fmt_fun = df ~ style_number,
+    include = c(r.squared, AIC, sigma, df)
+  )
+```
+
+We can see that all of the coefficients have low $p$-values, and the model has an $R^2$ of 0.745 (that is, the linear model explains 74.5% of the variance in life expectancy), which is pretty good. Next we should at least glance at the diagnostics.
+
+```{r}
+autoplot(fit3) + theme_bw()
+```
+
+From the diagnostics, we can see minor deviations from normality and some evidence of non-constant variance in the residuals, but I think, similar to what we saw before, the plots indicate that the residuals are correlated, so we truly do need to correct for correlated residuals. This means that the standard errors (and thus reported confidence intervals) of the linear models we reported are not necessarily reliable under this model. Let's plot the partial autocorrelations of the residuals for the model, this time using base R plotting for fun.
+
+```{r}
+pacf(residuals(fit3))
+```
+
+Yep, that is not ideal. There is definitely some residual autocorrelation of the residuals, though from this plot it is difficult to identify what the correlation structure is. So I think the next step would be adjusting for autocorrelation.
+
+But I feel like this is long enough already, so I am just going to caution everyone about the weirdness that can show up with time series analysis and end this discussion here.
