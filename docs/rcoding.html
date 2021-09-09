@@ -55,6 +55,7 @@
 pre > code.sourceCode { white-space: pre; position: relative; }
 pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
 pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
 code.sourceCode > span { color: inherit; text-decoration: inherit; }
 div.sourceCode { margin: 1em 0; }
 pre.sourceCode { margin: 0; }
@@ -376,12 +377,16 @@ $(document).ready(function () {
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dslabs)</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co">#tidyverse is used in data processing and tidying and in plotting </span></span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co">#Look at the help file for the gapminder data</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">help</span>(gapminder)</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co">#Get an overview of the data structure</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="fu">str</span>(gapminder)</span></code></pre></div>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co"># gtsummary is for making nice regression tables in HTML output</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(gtsummary)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co"># For regression diagnostic plots</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggfortify)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co">#Look at the help file for the gapminder data</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="fu">help</span>(gapminder)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="co">#Get an overview of the data structure</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="fu">str</span>(gapminder)</span></code></pre></div>
 <pre><code>## &#39;data.frame&#39;:    10545 obs. of  9 variables:
 ##  $ country         : Factor w/ 185 levels &quot;Albania&quot;,&quot;Algeria&quot;,..: 1 2 3 4 5 6 7 8 9 10 ...
 ##  $ year            : int  1960 1960 1960 1960 1960 1960 1960 1960 1960 1960 ...
@@ -675,6 +680,521 @@ $(document).ready(function () {
 ## Multiple R-squared:  0.005176,   Adjusted R-squared:  -0.01513 
 ## F-statistic: 0.2549 on 1 and 49 DF,  p-value: 0.6159</code></pre>
 <p>Based on the outcomes of the two models, I could conclude that increased infant mortality has a negative impact on life expectancy. That is, as infant mortality increases, life expectancy decreases (p &lt; 0.00001). However, there did not appear to be a significant relationship between life expectancy and population size (p = 0.616).</p>
+</div>
+<div id="predicting-life-expectancy-by-zane" class="section level1">
+<h1>Predicting life expectancy (by Zane!)</h1>
+<p>What I want to do in this section is fit a basic model to predict life expectancy by year.</p>
+<div id="eda" class="section level2">
+<h2>EDA</h2>
+<p>The first thing I want to do here is make a spaghetti plot of how each country’s life expectancy changes over the years.</p>
+<div class="sourceCode" id="cb41"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>africadata <span class="sc">|&gt;</span></span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(year, life_expectancy)) <span class="sc">+</span></span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="fu">aes</span>(<span class="at">color =</span> country), <span class="at">alpha =</span> <span class="fl">0.5</span>, <span class="at">show.legend =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">&quot;gam&quot;</span>, <span class="at">color =</span> <span class="st">&quot;black&quot;</span>) <span class="sc">+</span></span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">xlab</span>(<span class="st">&#39;Infant Mortality&#39;</span>) <span class="sc">+</span></span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ylab</span>(<span class="st">&#39;Life Expectancy&#39;</span>) <span class="sc">+</span></span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>()</span></code></pre></div>
+<pre><code>## `geom_smooth()` using formula &#39;y ~ s(x, bs = &quot;cs&quot;)&#39;</code></pre>
+<p><img src="rcoding_files/figure-html/unnamed-chunk-1-1.png" width="672" /></p>
+<p>Hmm, it looks like this relationship is not monotonic for several countries, and while there is a trend upwards overall, it is not necessarily linear. There is also a significant amount of variation in the trend, which is pretty normal for time series. There doesn’t appear to be any seasonal/cyclic change, at least on the annual scale of measurement for which we have data.</p>
+<p>Let’s color by region and see if we see any similar trends that could explain part of the country-level effect.</p>
+<div class="sourceCode" id="cb43"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>africadata <span class="sc">|&gt;</span></span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(year, life_expectancy)) <span class="sc">+</span></span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="fu">aes</span>(<span class="at">color =</span> country), <span class="at">show.legend =</span> <span class="cn">FALSE</span>, <span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">&quot;gam&quot;</span>, <span class="at">color =</span> <span class="st">&quot;black&quot;</span>) <span class="sc">+</span></span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">xlab</span>(<span class="st">&#39;Infant Mortality&#39;</span>) <span class="sc">+</span></span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ylab</span>(<span class="st">&#39;Life Expectancy&#39;</span>) <span class="sc">+</span></span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>() <span class="sc">+</span></span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="fu">vars</span>(region))</span></code></pre></div>
+<pre><code>## `geom_smooth()` using formula &#39;y ~ s(x, bs = &quot;cs&quot;)&#39;</code></pre>
+<p><img src="rcoding_files/figure-html/unnamed-chunk-2-1.png" width="672" /></p>
+<p>Let’s make a few more plots to see if we can observe any other relationships with life expectancy over time.</p>
+<div class="sourceCode" id="cb45"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>africadata <span class="sc">|&gt;</span></span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="st">`</span><span class="at">log10 population</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">log10</span>(population), <span class="st">`</span><span class="at">log10 gdp</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">log10</span>(gdp),</span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">.keep =</span> <span class="st">&quot;unused&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">c</span>(infant_mortality, fertility, <span class="st">`</span><span class="at">log10 population</span><span class="st">`</span>,</span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a>                 <span class="st">`</span><span class="at">log10 gdp</span><span class="st">`</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(year, value, <span class="at">color =</span> life_expectancy, <span class="at">group =</span> country)) <span class="sc">+</span></span>
+<span id="cb45-7"><a href="#cb45-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
+<span id="cb45-8"><a href="#cb45-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_viridis_c</span>(<span class="at">option =</span> <span class="st">&quot;plasma&quot;</span>) <span class="sc">+</span></span>
+<span id="cb45-9"><a href="#cb45-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>() <span class="sc">+</span></span>
+<span id="cb45-10"><a href="#cb45-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_cartesian</span>(<span class="at">expand =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb45-11"><a href="#cb45-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="fu">vars</span>(name), <span class="at">scales =</span> <span class="st">&quot;free_y&quot;</span>)</span></code></pre></div>
+<pre><code>## Warning: Removed 51 row(s) containing missing values (geom_path).</code></pre>
+<p><img src="rcoding_files/figure-html/unnamed-chunk-3-1.png" width="672" /></p>
+<p>I won’t try and make the argument that this is the best possible visualization for these data, but I think it is good enough to give us an idea of trends. Clearly, fertility and infant mortality vary with life expectancy across time. We can see this from how the curves trend over time, and how the pattern of colors shifts over time. However, while gdp and population size appear to vary with time, I do not think that they necessarily vary with life expectancy in the same way.</p>
+<p>Now since this is time series data, I think we are kind of obligated to plot the autocorrelation, so let’s make a plot of the partial autocorrelation (as this controls for previous lags, unlike the regular autocorrelation, and is thus easier to interpret).</p>
+<div class="sourceCode" id="cb47"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a>africadata <span class="sc">%&gt;%</span></span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(country, year, life_expectancy) <span class="sc">|&gt;</span></span>
+<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a>  tidyr<span class="sc">::</span><span class="fu">nest</span>(<span class="at">data =</span> <span class="sc">-</span>country) <span class="sc">|&gt;</span></span>
+<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">mutate</span>(</span>
+<span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">pacf_res =</span> purrr<span class="sc">::</span><span class="fu">map</span>(data, <span class="sc">~</span><span class="fu">pacf</span>(.x<span class="sc">$</span>life_expectancy, <span class="at">plot =</span> F, <span class="at">lag.max =</span> <span class="dv">10</span>)),</span>
+<span id="cb47-6"><a href="#cb47-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">pacf_val =</span> purrr<span class="sc">::</span><span class="fu">map</span>(pacf_res, <span class="sc">~</span><span class="fu">data.frame</span>(<span class="at">lag =</span> .x<span class="sc">$</span>lag, <span class="at">acf =</span> .x<span class="sc">$</span>acf))</span>
+<span id="cb47-7"><a href="#cb47-7" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb47-8"><a href="#cb47-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unnest</span>(pacf_val) <span class="sc">|&gt;</span></span>
+<span id="cb47-9"><a href="#cb47-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> lag, <span class="at">y =</span> acf)) <span class="sc">+</span></span>
+<span id="cb47-10"><a href="#cb47-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fu">c</span>(<span class="fu">qnorm</span>(<span class="fl">0.025</span>) <span class="sc">/</span> <span class="fu">sqrt</span>(<span class="dv">17</span>), <span class="fu">qnorm</span>(<span class="fl">0.975</span>) <span class="sc">/</span> <span class="fu">sqrt</span>(<span class="dv">17</span>)),</span>
+<span id="cb47-11"><a href="#cb47-11" aria-hidden="true" tabindex="-1"></a>             <span class="at">lty =</span> <span class="dv">2</span>, <span class="at">color =</span> <span class="st">&quot;gray&quot;</span>, <span class="at">size =</span> <span class="fl">1.5</span>) <span class="sc">+</span></span>
+<span id="cb47-12"><a href="#cb47-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">size =</span> <span class="fl">1.5</span>) <span class="sc">+</span></span>
+<span id="cb47-13"><a href="#cb47-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="fu">aes</span>(<span class="at">group =</span> country, <span class="at">color =</span> country), <span class="at">show.legend =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb47-14"><a href="#cb47-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>(<span class="at">base_size =</span> <span class="dv">20</span>) <span class="sc">+</span></span>
+<span id="cb47-15"><a href="#cb47-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">labels =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>, <span class="at">breaks =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>, <span class="at">minor_breaks =</span> <span class="cn">NULL</span>) <span class="sc">+</span></span>
+<span id="cb47-16"><a href="#cb47-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">&quot;lag&quot;</span>, <span class="at">y =</span> <span class="st">&quot;partial autocorrelation&quot;</span>) <span class="sc">+</span></span>
+<span id="cb47-17"><a href="#cb47-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggtitle</span>(<span class="st">&quot;Partial autocorrelation of life expectancy by year for each African country&quot;</span>)</span></code></pre></div>
+<p><img src="rcoding_files/figure-html/unnamed-chunk-4-1.png" width="672" /></p>
+<p>The dashed gray lines on this plot represent approximate normal 95% confidence bands. We see that all countries have a partial autocorrelation at the 1st lag which lies outside of the 95% confidence band, but at the 2nd lag, only one country has a value outside of the band. Since we are testing a larging amount of countries, I think we can safely say that this one second lag value is spurious. The interpretation of a significant first lag partial autocorrelation value (and no other significant partial autocorrelations) is that our time series can be modeled as an autoregressive process of order 1, AKA an AR(1) process.</p>
+</div>
+<div id="imputation" class="section level2">
+<h2>Imputation</h2>
+<p>Most time series models have no way to deal with missing data. There are a lot of ways we could deal with this, and in this case we could likely find another data source to fill in the missing values with real information. But I am too lazy to do that. So first, let’s look at how much data is actually missing.</p>
+<div class="sourceCode" id="cb48"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a>africadata <span class="sc">|&gt;</span></span>
+<span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">!</span>continent) <span class="sc">|&gt;</span></span>
+<span id="cb48-3"><a href="#cb48-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(<span class="fu">across</span>(<span class="fu">everything</span>(), <span class="sc">~</span><span class="fu">mean</span>(<span class="fu">is.na</span>(.x)))) <span class="sc">|&gt;</span></span>
+<span id="cb48-4"><a href="#cb48-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">everything</span>(), <span class="at">names_to =</span> <span class="st">&quot;field&quot;</span>, <span class="at">values_to =</span> <span class="st">&quot;pct_m&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb48-5"><a href="#cb48-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> pct_m, <span class="at">y =</span> forcats<span class="sc">::</span><span class="fu">fct_reorder</span>(field, pct_m))) <span class="sc">+</span></span>
+<span id="cb48-6"><a href="#cb48-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>() <span class="sc">+</span></span>
+<span id="cb48-7"><a href="#cb48-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_label</span>(<span class="fu">aes</span>(<span class="at">label =</span> scales<span class="sc">::</span><span class="fu">percent</span>(<span class="fu">round</span>(pct_m, <span class="dv">2</span>))), <span class="at">size =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb48-8"><a href="#cb48-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>(<span class="at">base_size =</span> <span class="dv">20</span>) <span class="sc">+</span></span>
+<span id="cb48-9"><a href="#cb48-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">&quot;percent of records missing&quot;</span>, <span class="at">y =</span> <span class="cn">NULL</span>) <span class="sc">+</span></span>
+<span id="cb48-10"><a href="#cb48-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">labels =</span> scales<span class="sc">::</span><span class="fu">percent_format</span>())</span></code></pre></div>
+<p><img src="rcoding_files/figure-html/unnamed-chunk-5-1.png" width="672" /></p>
+<p>Well, the most missing values are in GDP, which did not appear to be a strong predictor anyways, so we can throw that one out. And then since infant mortality and fertility both have missingness less than 10%, for this simple example I think it will be fine to impute with the median, although in a real analysis something more complex might be better to reduce bias.</p>
+<div class="sourceCode" id="cb49"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>modeldata <span class="ot">&lt;-</span> africadata <span class="sc">|&gt;</span></span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(<span class="sc">-</span>continent, <span class="sc">-</span>gdp, <span class="sc">-</span>population) <span class="sc">|&gt;</span></span>
+<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">mutate</span>(</span>
+<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">across</span>(<span class="fu">c</span>(infant_mortality, fertility),</span>
+<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a>           <span class="sc">~</span>dplyr<span class="sc">::</span><span class="fu">if_else</span>(<span class="fu">is.na</span>(.x), <span class="fu">median</span>(.x, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), .x)</span>
+<span id="cb49-6"><a href="#cb49-6" aria-hidden="true" tabindex="-1"></a>           )</span>
+<span id="cb49-7"><a href="#cb49-7" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div>
+</div>
+<div id="simple-model-fitting" class="section level2">
+<h2>Simple model fitting</h2>
+<p>Now that the imputation is done, let’s build a multivariable linear model. For this model we are going to ignore what we learned about the potentially autoregressive structure of the data :)</p>
+<p>Now we have been looking at this by country previously, but I think that including 50+ regression parameters is maybe a bit excessive. So let’s group by region instead, which will give us a much more manageable number of regression coefficients. I don’t know which region of Africa we sould select as the reference group, so I will let R use the default (which in this case is Eastern Africa).</p>
+<div class="sourceCode" id="cb50"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a>fit3 <span class="ot">&lt;-</span> <span class="fu">lm</span>(life_expectancy <span class="sc">~</span> . <span class="sc">-</span> country, <span class="at">data =</span> modeldata)</span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>fit3 <span class="sc">|&gt;</span></span>
+<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>() <span class="sc">|&gt;</span></span>
+<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_glance_source_note</span>(</span>
+<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">label =</span> <span class="fu">list</span>(df  <span class="sc">~</span> <span class="st">&quot;Degrees of Freedom&quot;</span>, sigma <span class="sc">~</span> <span class="st">&quot;\U03C3&quot;</span>),</span>
+<span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">fmt_fun =</span> df <span class="sc">~</span> style_number,</span>
+<span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">include =</span> <span class="fu">c</span>(r.squared, AIC, sigma, df)</span>
+<span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div>
+<div id="hlllmjinpb" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
+<style>html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
+}
+
+#hlllmjinpb .gt_table {
+  display: table;
+  border-collapse: collapse;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#hlllmjinpb .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#hlllmjinpb .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#hlllmjinpb .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 0;
+  padding-bottom: 6px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#hlllmjinpb .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#hlllmjinpb .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#hlllmjinpb .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#hlllmjinpb .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#hlllmjinpb .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#hlllmjinpb .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#hlllmjinpb .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#hlllmjinpb .gt_group_heading {
+  padding: 8px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#hlllmjinpb .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#hlllmjinpb .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#hlllmjinpb .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#hlllmjinpb .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#hlllmjinpb .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 12px;
+}
+
+#hlllmjinpb .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#hlllmjinpb .gt_first_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+}
+
+#hlllmjinpb .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#hlllmjinpb .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#hlllmjinpb .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#hlllmjinpb .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#hlllmjinpb .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#hlllmjinpb .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding: 4px;
+}
+
+#hlllmjinpb .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#hlllmjinpb .gt_sourcenote {
+  font-size: 90%;
+  padding: 4px;
+}
+
+#hlllmjinpb .gt_left {
+  text-align: left;
+}
+
+#hlllmjinpb .gt_center {
+  text-align: center;
+}
+
+#hlllmjinpb .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#hlllmjinpb .gt_font_normal {
+  font-weight: normal;
+}
+
+#hlllmjinpb .gt_font_bold {
+  font-weight: bold;
+}
+
+#hlllmjinpb .gt_font_italic {
+  font-style: italic;
+}
+
+#hlllmjinpb .gt_super {
+  font-size: 65%;
+}
+
+#hlllmjinpb .gt_footnote_marks {
+  font-style: italic;
+  font-weight: normal;
+  font-size: 65%;
+}
+</style>
+<table class="gt_table">
+  
+  <thead class="gt_col_headings">
+    <tr>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1"><strong>Characteristic</strong></th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_center" rowspan="1" colspan="1"><strong>Beta</strong></th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_center" rowspan="1" colspan="1"><strong>95% CI</strong><sup class="gt_footnote_marks">1</sup></th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_center" rowspan="1" colspan="1"><strong>p-value</strong></th>
+    </tr>
+  </thead>
+  <tbody class="gt_table_body">
+    <tr><td class="gt_row gt_left">year</td>
+<td class="gt_row gt_center">0.12</td>
+<td class="gt_row gt_center">0.10, 0.13</td>
+<td class="gt_row gt_center"><0.001</td></tr>
+    <tr><td class="gt_row gt_left">infant_mortality</td>
+<td class="gt_row gt_center">-0.13</td>
+<td class="gt_row gt_center">-0.13, -0.12</td>
+<td class="gt_row gt_center"><0.001</td></tr>
+    <tr><td class="gt_row gt_left">fertility</td>
+<td class="gt_row gt_center">-0.32</td>
+<td class="gt_row gt_center">-0.49, -0.14</td>
+<td class="gt_row gt_center"><0.001</td></tr>
+    <tr><td class="gt_row gt_left">region</td>
+<td class="gt_row gt_center"></td>
+<td class="gt_row gt_center"></td>
+<td class="gt_row gt_center"></td></tr>
+    <tr><td class="gt_row gt_left" style="text-align: left; text-indent: 10px;">Eastern Africa</td>
+<td class="gt_row gt_center">—</td>
+<td class="gt_row gt_center">—</td>
+<td class="gt_row gt_center"></td></tr>
+    <tr><td class="gt_row gt_left" style="text-align: left; text-indent: 10px;">Middle Africa</td>
+<td class="gt_row gt_center">-1.8</td>
+<td class="gt_row gt_center">-2.3, -1.3</td>
+<td class="gt_row gt_center"><0.001</td></tr>
+    <tr><td class="gt_row gt_left" style="text-align: left; text-indent: 10px;">Northern Africa</td>
+<td class="gt_row gt_center">7.3</td>
+<td class="gt_row gt_center">6.7, 7.9</td>
+<td class="gt_row gt_center"><0.001</td></tr>
+    <tr><td class="gt_row gt_left" style="text-align: left; text-indent: 10px;">Southern Africa</td>
+<td class="gt_row gt_center">-2.6</td>
+<td class="gt_row gt_center">-3.2, -1.9</td>
+<td class="gt_row gt_center"><0.001</td></tr>
+    <tr><td class="gt_row gt_left" style="text-align: left; text-indent: 10px;">Western Africa</td>
+<td class="gt_row gt_center">0.69</td>
+<td class="gt_row gt_center">0.25, 1.1</td>
+<td class="gt_row gt_center">0.002</td></tr>
+  </tbody>
+  <tfoot class="gt_sourcenotes">
+    <tr>
+      <td class="gt_sourcenote" colspan="4">R² = 0.745; AIC = 17,044; σ = 4.53; Degrees of Freedom = 7</td>
+    </tr>
+  </tfoot>
+  <tfoot>
+    <tr class="gt_footnotes">
+      <td colspan="4">
+        <p class="gt_footnote">
+          <sup class="gt_footnote_marks">
+            <em>1</em>
+          </sup>
+           
+          CI = Confidence Interval
+          <br />
+        </p>
+      </td>
+    </tr>
+  </tfoot>
+</table>
+</div>
+<p>We can see that all of the coefficients have low <span class="math inline">\(p\)</span>-values, and the model has an <span class="math inline">\(R^2\)</span> of 0.745 (that is, the linear model explains 74.5% of the variance in life expectancy), which is pretty good. Next we should at least glance at the diagnostics.</p>
+<div class="sourceCode" id="cb51"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="fu">autoplot</span>(fit3) <span class="sc">+</span> <span class="fu">theme_bw</span>()</span></code></pre></div>
+<p><img src="rcoding_files/figure-html/unnamed-chunk-8-1.png" width="672" /></p>
+<p>From the diagnostics, we can see minor deviations from normality and some evidence of non-constant variance in the residuals, but I think, similar to what we saw before, the plots indicate that the residuals are correlated, so we truly do need to correct for correlated residuals. This means that the standard errors (and thus reported confidence intervals) of the linear models we reported are not necessarily reliable under this model. Let’s plot the partial autocorrelations of the residuals for the model, this time using base R plotting for fun.</p>
+<div class="sourceCode" id="cb52"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a><span class="fu">pacf</span>(<span class="fu">residuals</span>(fit3))</span></code></pre></div>
+<p><img src="rcoding_files/figure-html/unnamed-chunk-9-1.png" width="672" /></p>
+<p>Yep, that is not ideal. There is definitely some residual autocorrelation of the residuals, though from this plot it is difficult to identify what the correlation structure is. So I think the next step would be adjusting for autocorrelation.</p>
+<p>But I feel like this is long enough already, so I am just going to caution everyone about the weirdness that can show up with time series analysis and end this discussion here.</p>
+</div>
 </div>
 
 
