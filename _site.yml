@@ -2,7 +2,7 @@ name: "My Data Analysis Portfolio"
 output_dir: 'docs'
 output:
   html_document:
-    theme: cosmo
+    theme: sandstone
     highlight: zenburn
     toc: false
 navbar:
