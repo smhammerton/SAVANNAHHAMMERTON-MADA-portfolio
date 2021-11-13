@@ -1,8 +1,10 @@
 ---
 title: "Analysis and Model Fitting Exercise"
-author: "Savannah Hammerton"
-date: "11/2/2021"
-output: html_document
+output: 
+  html_document:
+    theme: sandstone
+    highlight: zenburn
+    toc: false 
 ---
 
 This is part of an analysis exercise in the Modern Applied Data Analysis course. The repository for the entire exercise can be found [here](https://github.com/smhammerton/SAVANNAHHAMMERTON-MADA-analysis3). 
@@ -20,10 +22,10 @@ library(gtsummary) #for summary tables
 library(ranger) #for model fitting 
 library(rpart) #for model fitting 
 library(glmnet) #for model fitting 
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 #load data 
-mydata <- readRDS(here::here('files', 'data', 'processed_data', 'processeddata.rds'))
+mydata <- readRDS(here::here('files', 'processeddata.rds'))
 
 ```
 
