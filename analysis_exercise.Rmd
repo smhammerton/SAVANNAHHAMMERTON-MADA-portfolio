@@ -12,7 +12,7 @@ This is part of an analysis exercise in the Modern Applied Data Analysis course.
 
 I need to first load the packages we'll be using and load in the data. 
 
-```{r setup, include=FALSE}
+```{r setup}
 #load needed packages 
 library(tidyverse) #for data processing 
 library(tidymodels) #for model fitting 
@@ -25,7 +25,6 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 #load data 
 mydata <- readRDS(here::here('files', 'processeddata.rds'))
-
 ```
 
 ## Feature/Variable Removal
@@ -52,13 +51,11 @@ mydata.3 <- mydata.2 %>%
 is.ordered(mydata.3$Weakness)
 is.ordered(mydata.3$CoughIntensity)
 is.ordered(mydata.3$Myalgia)
-
-
 ```
 
 ## Low variance predictors 
 
-I need to remove all binary predictors that have less than <50 entries in one of the categories. To do that, I first need to see what predictors fall into that category. Then I'll remove them from the data set.
+I now need to remove all binary predictors that have less than <50 entries in one of the categories. To do that, I first need to see what predictors fall into that category. Then I'll remove them from the data set.
 
 ```{r low variance predictors}
 # create summary table to see what binary predictors have <50 in one category 
@@ -79,6 +76,8 @@ mydata.fin <- mydata.4
 ```
 
 ## Data setup 
+
+In this step, I will set the seed to fix random numbers, split the data into train and test data, create and 5x5 cross-validation resample object, and create the recipe for the body temperature outcome as well as the linear regression model specification. 
 
 ```{r data setup}
 # set seed to fix random numbers 
@@ -112,6 +111,8 @@ linear_reg_lm_spec <-
 
 ## Null model performance 
 
+The first model to fit is the null model. This will be fit to both the train and the test data. 
+
 ```{r null model performance}
 #compute the performance of a null model with no predictor information - train data 
 null_mod_train <- lm(BodyTemp ~ 1, data = train_data)
@@ -133,7 +134,9 @@ null_rmse <- null_mod_test %>%
   mutate(model = 'Null Model')
 ```
 
-## Model tuning and fitting
+## Model tuning and fitting {.tabset}
+
+The model fitting process will be: 
 
 1) Define the model specification 
 2) Create a workflow 
@@ -146,9 +149,22 @@ null_rmse <- null_mod_test %>%
 
 Do these steps for each model (tree, LASSO, random forest)
 
-Finally, look at rmses for all models (including null) together - choose best performing model, fit to test data, then repeat 7 and 8.
+Finally, look at RMSEs for all models (including null) together - choose best performing model, fit to test data, then repeat 7 and 8.
 
 ### Tree
+
+As a reminder, the tree model will be fit by following these steps: 
+
+1) Define the model specification 
+2) Create a workflow 
+3) Create a tuning grid and tune the hyperparameters  
+4) Autoplot the results 
+5) Finalize the workflow
+6) Fit the model to the training data 
+7) Estimate model performance with RMSE 
+8) Make diagnostic plots 
+
+Let's get started! 
 
 ```{r tree, message=FALSE}
 # 1) define model spec 
@@ -176,6 +192,7 @@ tree_res <- tree_wflow %>%
             grid = tree_grid,
             metrics = metric_set(rmse),
             control = control_grid(verbose = T))
+
 # 4) autoplot the results 
 tree_res %>% autoplot()
 
@@ -203,6 +220,7 @@ aug_train_happy_tree <- augment(fit_train_happy_tree, new_data = train_data)
 tree_rmse <- aug_train_happy_tree %>% 
   rmse(truth = BodyTemp, .pred) %>% 
   mutate(model = 'Regression Tree')
+tree_rmse
 
 # 8) Make diagnostic plots 
 ## view decision tree 
@@ -217,8 +235,23 @@ aug_train_happy_tree %>%
   mutate(resid = BodyTemp - .pred) %>% 
   ggplot(aes(x = .pred, y = resid)) +
   geom_point()
-
 ```
+
+When looking at the autoplot of the results, it appears that a tree depth of one produces the lowest RMSE. We can see that this is the model that is chosen by looking at the extracted fit decision tree, which only goes down one level. 
+
+### LASSO
+
+The same basic steps for the tree model will be used for the LASSO model as well: 
+
+1) Define the model specification 
+2) Create a workflow 
+3) Create a tuning grid and tune the hyperparameters  
+4) Autoplot the results 
+5) Finalize the workflow
+6) Fit the model to the training data 
+7) Estimate model performance with RMSE 
+8) Make diagnostic plots 
+
 
 ```{r lasso}
 # 1) define model spec 
@@ -274,6 +307,7 @@ aug_best_lasso <- augment(fit_best_lasso, new_data = train_data)
 lasso_rmse <- aug_best_lasso %>% 
   rmse(truth = BodyTemp, .pred) %>% 
   mutate(model = 'LASSO')
+lasso_rmse
 
 # 8) Make diagnostic plots 
 ## view coefficient values vs penalty terms 
@@ -289,6 +323,21 @@ aug_best_lasso %>%
   ggplot(aes(x = .pred, y = resid)) +
   geom_point()
 ```
+
+My biggest concern with this model is that the variance seems to increase with increasing temperature. Prediction accuracy also increases as temperature increases. 
+
+### Random Forest 
+
+We'll follow these same steps one last time! 
+
+1) Define the model specification 
+2) Create a workflow 
+3) Create a tuning grid and tune the hyperparameters  
+4) Autoplot the results 
+5) Finalize the workflow
+6) Fit the model to the training data 
+7) Estimate model performance with RMSE 
+8) Make diagnostic plots 
 
 ```{r random forest}
 #cores <- parallel::detectCores()
@@ -350,6 +399,7 @@ aug_best_forest <- augment(fit_best_forest, new_data = train_data)
 forest_rmse <- aug_best_forest %>% 
   rmse(truth = BodyTemp, .pred) %>% 
   mutate(model = 'Random Forest')
+forest_rmse
 
 # 8) Make diagnostic plots 
 
@@ -364,13 +414,20 @@ aug_best_forest %>%
   geom_point()
 ```
 
-#
+These diagnostic plots looks a little better than those of the LASSO model. The RMSE is lower as well. These things indicate this is a better model for this analysis. 
+
+# Model Selection 
+
+In order to choose the best performing model, I will look at all of the RMSEs together. The model with the lowest RMSE will be the one I fit to the test data. 
+
 ```{r}
 #view RMSEs of all four models 
 knitr::kable(rbind(null_rmse, tree_rmse, lasso_rmse, forest_rmse))
 ```
 
-The random forest model performed far better than the other three, according to the RMSE of 1.06, so I will fit the test data to this model.
+The random forest model performed far better than the other three, as evidenced by the lowest RMSE, so I will fit the test data to this model.
+
+# Final Model Fit to Test Data 
 
 ```{r final fitting}
 forest_final <- best_forest_wflow %>% 
@@ -389,7 +446,6 @@ aug_final_forest %>%
   rmse(truth = BodyTemp, .pred) 
 
 # 8) Make diagnostic plots 
-
 #plot actual vs fitted  
 ggplot(data = aug_final_forest, aes(x = .pred, y = BodyTemp)) +
   geom_point()
@@ -400,3 +456,5 @@ aug_final_forest %>%
   ggplot(aes(x = .pred, y = resid)) +
   geom_point()
 ```
+
+When fit to the test data, the model did not perform quite as well as it did when fit to the train data, but this is not too surprising. The diagnostic plots also indicate increased variance. 
