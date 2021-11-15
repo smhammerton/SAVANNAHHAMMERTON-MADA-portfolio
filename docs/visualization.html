@@ -348,7 +348,7 @@ $(document).ready(function () {
       <a href="./tidytuesday_exercise2.html">Tidy Tuesday 2 Exercise</a>
     </li>
     <li>
-      <a href="./files/module11analysisscript.html">Analysis and Model Fitting Exercise</a>
+      <a href="./analysis_exercise.html">Analysis and Model Fitting Exercise</a>
     </li>
   </ul>
 </li>
@@ -379,7 +379,7 @@ $(document).ready(function () {
 <h2>Getting Started</h2>
 <p>Here is the figure I want to recreate.</p>
 <div class="figure">
-<img src="marriage_figure.png" style="width:70.0%" alt="" />
+<img src="marriage/marriage_figure.png" style="width:70.0%" alt="" />
 <p class="caption"><em>My chosen figure to replicate</em></p>
 </div>
 <p>First, I need to load the packages I’ll need to complete this exercise.</p>
@@ -544,7 +544,7 @@ $(document).ready(function () {
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>finalvis</span></code></pre></div>
 <p><img src="visualization_files/figure-html/unnamed-chunk-6-1.png" width="768" /></p>
 <div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># saving figure</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>figurefile <span class="ot">=</span> here<span class="sc">::</span><span class="fu">here</span>(<span class="st">&#39;visualizationfigure.png&#39;</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>figurefile <span class="ot">=</span> here<span class="sc">::</span><span class="fu">here</span>(<span class="st">&#39;marriage&#39;</span>, <span class="st">&#39;visualizationfigure.png&#39;</span>)</span>
 <span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="at">filename =</span> figurefile, <span class="at">plot =</span> finalvis)</span></code></pre></div>
 <pre><code>## Saving 8 x 4.96 in image</code></pre>
 <div class="figure">
@@ -627,7 +627,7 @@ $(document).ready(function () {
 <span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>finalvis2</span></code></pre></div>
 <p><img src="visualization_files/figure-html/unnamed-chunk-8-1.png" width="1056" /></p>
 <div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># saving new figure</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>figurefile2 <span class="ot">=</span> here<span class="sc">::</span><span class="fu">here</span>(<span class="st">&#39;visualizationfigure2.png&#39;</span>)</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>figurefile2 <span class="ot">=</span> here<span class="sc">::</span><span class="fu">here</span>(<span class="st">&#39;marriage&#39;</span>, <span class="st">&#39;visualizationfigure2.png&#39;</span>)</span>
 <span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="at">filename =</span> figurefile2, <span class="at">plot =</span> finalvis2)</span></code></pre></div>
 <pre><code>## Saving 11 x 8.8 in image</code></pre>
 <p>Here’s the original one more time for reference! <img src="marriage_figure.png" style="width:70.0%" alt="Closer!" /></p>

@@ -22,7 +22,7 @@ navbar:
         - text: "Tidy Tuesday 2 Exercise"
           href: ./tidytuesday_exercise2.html
         - text: "Analysis and Model Fitting Exercise"
-          href: ./files/module11analysisscript.html	
+          href: ./analysis_exercise.html	
   right:
     - icon: fa-github fa-lg
       href: https://github.com/smhammerton/SAVANNAHHAMMERTON-MADA-portfolio        

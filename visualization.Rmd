@@ -12,7 +12,7 @@ For this exercise, I will be [attempting to] recreate a figure I found at [fivet
 
 Here is the figure I want to recreate.
 
-![_My chosen figure to replicate_](marriage_figure.png){width=70%}
+![_My chosen figure to replicate_](marriage/marriage_figure.png){width=70%}
 
 First, I need to load the packages I'll need to complete this exercise. 
 ```{r}
@@ -109,7 +109,7 @@ finalvis <- plot_grid(educ, race, align = 'hv')
 finalvis
 
 # saving figure
-figurefile = here::here('visualizationfigure.png')
+figurefile = here::here('marriage', 'visualizationfigure.png')
 ggsave(filename = figurefile, plot = finalvis)
 ```
 
@@ -196,7 +196,7 @@ finalvis2 <- plot_grid(educ2, race2, align = 'hv') +
 finalvis2
 
 # saving new figure
-figurefile2 = here::here('visualizationfigure2.png')
+figurefile2 = here::here('marriage', 'visualizationfigure2.png')
 ggsave(filename = figurefile2, plot = finalvis2)
 
 ```
