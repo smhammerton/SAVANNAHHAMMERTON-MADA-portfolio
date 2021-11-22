@@ -1,8 +1,641 @@
 ---
-title: "Tidy Tuesday"
+title: "Tidy Tuesday - Marble Racing"
 output: 
   html_document:
-    toc: FALSE
+    toc: TRUE
+    toc_float: TRUE
+editor_options: 
+  chunk_output_type: console
 ---
 
-To be completed! 
+# Marble Racing Analysis Exercise 
+
+In this exercise, I will be analyzing data from marble racing! An overview for the racing can be found [here](https://www.youtube.com/watch?v=z4gBMw64aqk&t=1067s), but as a quick heads up - there is some not safe for work language in the video! 
+
+## Setup
+
+The first thing I need to do is actually load the data and set up some other basic things for the analysis such as package loading and document settings. 
+
+```{r set up}
+# Package loading 
+library(tidyverse)
+library(tidymodels)
+library(gtsummary)
+library(ranger)
+library(kernlab)
+library(earth)
+
+# Document settings 
+here::here() #set paths 
+ggplot2::theme_set(theme_light()) #set plot themes 
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE) #document chunk settings 
+
+# Load data and set to object 
+marbles <- readr::read_csv(
+  'https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-06-02/marbles.csv'
+  )
+```
+
+## Processing 
+
+Now that I have everything ready to go, I can start exploring the data! To start off easy, I'll use the `glimpse()` function to see some variable information. 
+
+```{r glimpse data}
+glimpse(marbles)
+```
+
+Right off the bat, I see some things I'd like to fix, and some I have questions about. For instance, I can change the `date` variable to an actual date data type, and can probably change the `host` variable to a factor (I just need to make sure the only options are "Yes" and "No"). I might be able to do the same to `pole` and `site`. There are also a couple of variables that, at least in the first few observations, are all NAs. If there doesn't seem to be much information in those, I'll go ahead and remove them. 
+
+```{r data exploration}
+# Check host variable responses
+print(unique(marbles$host))
+# Just yes and no - I will change this to a factor 
+
+# Check site variables responses 
+print(unique(marbles$site))
+# I will make this a factor as well 
+
+# Check pole variable responses 
+print(unique(marbles$pole))
+# This includes some missing data - I need to see how much 
+
+# This is probably a good time to check missing data for the whole data set
+naniar::vis_miss(marbles)
+
+# Check points variable responses 
+print(unique(marbles$points))
+```
+
+I'm not sure what's going on with the `points` and `poles` variables. Only one of them seems to be present at a time, but the responses are not the same. I'm going to just remove both of those variables from the set, as well as the `notes` variable. It seems like the `source` variable is also just the link to the Youtube video of the race, so I might as well get rid of that as well. I will then make the other changes mentioned above, and remove the few observations that are missing time information. 
+
+```{r data processing}
+# Make previously decided changes to data set
+marbles.2 <- marbles %>% 
+  select(!c(pole, points, notes, source)) %>% 
+  mutate(
+    date = lubridate::dmy(date),
+    host = as_factor(host),
+    site = as_factor(site),
+    race = as_factor(race),
+  ) %>% 
+  drop_na()
+
+# Check new object 
+glimpse(marbles.2)
+```
+
+This is much better! Now I can begin doing some exploration of the information in this data set.
+
+## Exploratory Data Analysis 
+
+First, I want to get an idea of the information contained here, other than things like team name, marble name, etc., so I'm going to create a summary table to see it all. 
+
+```{r}
+# Create summary table with only variables of interest 
+marbles.2 %>% 
+  select(!c(race, site, marble_name, team_name, host)) %>% #remove unneeded variables 
+  gtsummary::tbl_summary()
+```
+
+There's a pretty big range in lap number, so I can tell that just looking at the overall time in seconds is not going to tell much. I'll need to rely more on the average time per lap, or create another variable to examine results. 
+
+For now, I'm going to look at the average lap time. First I'll look at the distribution of this information overall, and then see if there are any apparent differences by team. 
+
+```{r}
+# Create histogram of averagee lap time 
+ggplot(data = marbles.2, aes(x = avg_time_lap)) +
+  geom_histogram()
+```
+
+This appears almost normal, but not quite - the peak around 34 gives it the appearance of some right skewness. I'll do a histogram with a log transformation just to be sure. 
+
+```{r}
+# Create histogram of log avereage lap time 
+ggplot(data = marbles.2, aes(x = log(avg_time_lap))) +
+         geom_histogram()
+```
+
+This looks about the same as the histogram of the untransformed variable, so I'm going to assume the skewness isn't enough to make a big impact. 
+
+```{r}
+# Create boxplot of average lap times in teams 
+ggplot(data = marbles.2, aes(x = avg_time_lap, fill = team_name)) +
+  geom_boxplot()
+```
+
+There don't seem to be any big differences between teams. I'll try to look at the same thing, but by marble names. 
+
+```{r}
+# Create boxplot of average lap times in marbles  
+ggplot(data = marbles.2, aes(x = avg_time_lap, fill = marble_name)) +
+  geom_boxplot()
+```
+
+Interestingly, there do seem to be some differences here. Namely, Mary seems to have longer lap times and Clementin seems to have shorter lap times.
+
+I want to do a very quick analysis to see there is any statistical indicator of differences in average lap time between the marbles. 
+
+```{r}
+# Fit average lap time to marbles 
+marble_fit <- lm(avg_time_lap  ~ marble_name, data = marbles.2)
+# Present results 
+knitr::kable(broom::tidy(marble_fit, conf.int = TRUE))
+# View other results 
+glance(marble_fit)
+```
+
+These results show about what I expected - there are some slight differences between marbles, but nothing major. The adjusted R-squared shows a very small amount of variability in average lap time being explained by the different marbles. 
+
+This seems like a good time to add a variable with the winners of the race (I was really surprised that there wasn't one to begin with). I'm going to base it off of the `time_s`variable. While I couldn't use that variable to tell much overall (due to the different laps and track lengths), if I group the race, I think it should be the best way to tell who won. 
+
+```{r}
+# Create winner variable 
+marbles.3 <- marbles.2 %>% 
+  group_by(race) %>%
+  mutate(
+    place = rank(-time_s),
+    winner = (place == 1))
+
+# Check object info
+glimpse(marbles.3)
+```
+
+Ok, now that I have this information, I think I'll use place as my main outcome. However, I still want to do some exploration of other variables. 
+
+I'd like to see if factors like date, race, and site impacted the average lap times. Let's start with date. 
+
+```{r}
+# Visualize average lap timese by date
+ggplot(data = marbles.3, aes(x = date, y = avg_time_lap)) +
+  geom_point() +
+  geom_smooth()
+```
+
+Hmm, that doesn't seem like much of anything. However, I remember that the times didn't seem quite normally distributed, so let me try transforming that variable just to be sure. 
+
+```{r}
+# Visualize log averagee lap times by date 
+ggplot(data = marbles.3, aes(x = date, y = log(avg_time_lap))) +
+  geom_point() +
+  geom_smooth()
+```
+
+That doesn't look very different at all, which probably means the data is close enough to a normal distribution that it doesn't make much of a difference. 
+
+It doesn't look like data impacts lap time much. Next, let's try by race. 
+
+```{r}
+# Visualize average lap times by race 
+ggplot(data = marbles.3, aes(x = race, y = avg_time_lap)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 45))
+```
+
+This is kind of interesting, in that it seems almost cyclical, but I don't know enough about the different races to have any idea about why that could be. Maybe it has to do with number of laps? Let's check that. 
+
+```{r}
+# Visualize average lap time by race, broken down by number of laps 
+ggplot(data = marbles.3, aes(x = race, y = avg_time_lap)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 45)) +
+  facet_wrap(vars(number_laps))
+```
+
+It's a little difficult to make any big assumptions based off this, but I don' see any reason to believe that the number of laps is really influencing the average lap time. 
+
+Let's see if site made any impact. 
+
+```{r}
+# Visualize average lap time by site 
+ggplot(data = marbles.3, aes(x = avg_time_lap, fill = site)) +
+  geom_boxplot()
+```
+
+Well, there are definitely differences here. I'm guessing that maybe some of these differences are due to different race setups/track types, as the video showed a variety of tracks, but there's nothing in the data to explain this. 
+
+Now I want to see if any of the teams tended to perform better or worse in the race placing. 
+
+```{r}
+# Visualize diffent teams' race placing 
+ggplot(data = marbles.3, aes(x = place, fill = team_name)) +
+  geom_boxplot() 
+```
+
+It seems like the Savage Speeders were not so savage _or_ speedy. The Hazers didn't appear to do great either. 
+
+I'll now do the same thing with marble name. 
+
+```{r}
+# Visualize different marbles' race placing 
+ggplot(data = marbles.3, aes(x = place, fill = marble_name)) +
+  geom_boxplot() 
+```
+
+There are actually _all_sorts of differences here. I'm going to do a quick analysis to confirm this. 
+
+```{r}
+# Fit marbles to race placing 
+place_fit <- lm(place ~ marble_name, data = marbles.3)
+# Present results 
+knitr::kable(tidy(place_fit, conf.int = TRUE))
+# View additional model results 
+glance(place_fit)
+```
+
+It looks like marble name is (statistically) a predictor of race placing. What does this mean in real life? I'm not sure. Maybe there's some physical characteristic of the different marbles that allow them to perform better, or maybe the fates favor some marbles over others. `r emoji::emoji("shrug")`
+
+## Question
+
+I've seen some interesting things in the exploration of this data. I think what I'm most interested in is the average lap time. I want to see how various factors in the data impact lap time. However, some of the variables in my data set are probably not relevant or useful in this, so I need to finalize my data set by removing these. Specifically, I'm going to get rid of the `host` and `winner` variables. 
+
+```{r final dataset}
+# Finalize dataset with only relevant data 
+marbles.fin <- marbles.3 %>% 
+  select(!c(host, winner, place, time_s, number_laps))
+```
+
+## Analysis 
+
+It's time to begin the actual analysis. The first thing I need to is split my final dataset into test and train data. I am also going to go ahead and set up my resample object. 
+
+```{r analysis setup}
+# Set seed to fix random numbers 
+set.seed(123)
+
+# Put 70% of data into training set 
+data_split <- initial_split(marbles.fin, 
+                            prop = 7/10, #split data set into 70% training, 30% testing
+                            strata = avg_time_lap) #use lap time as stratification 
+
+# Create data frames for training and testing sets 
+train_data <- training(data_split)
+test_data <- testing(data_split)
+
+# Create a resample object for the training data; 5x5, stratify on lap time 
+cv5 <- vfold_cv(train_data, 
+                v = 5, 
+                repeats = 5, 
+                strata = avg_time_lap)
+```
+
+I need to decide what models to try with this question. We've covered many over this semester, including (but not limited to): 
+
+  * Polynomial and Spline Models 
+  * CART Models 
+  * Ensemble Models ( _i.e._ Random Forests)
+  * Support Vector Machine Models (SVM)
+  * Discriminant Analysis Models 
+  
+Now that I know my outcome will be average lap time, which is continuous, my basic model will a linear regression model. The ML models I will fit are:
+
+  * Spline 
+  * Tree 
+  * Random Forest
+  * SVM
+  
+I also need to establish how I will evaluate these model fits. I will use the RMSE to do this.
+
+Now, it's time to set up my recipe. 
+
+```{r}
+# Create recipe 
+lap_rec <- recipe(avg_time_lap ~ ., #lap time outcome, all other predictors 
+                  data = train_data) %>% 
+  step_dummy(all_nominal_predictors()) #create dummy variables for all nominal variables 
+```
+
+
+With all this set, let's start with the null model! 
+
+### Null Model
+
+```{r null model}
+# Fit null model to train data 
+null_model <- lm(avg_time_lap ~ 1, data = train_data)
+
+# View results 
+knitr::kable(tidy(null_model))
+
+# Double checking estimate 
+mean(train_data$avg_time_lap)
+
+# RMSE
+null_rmse <- null_model %>% 
+  augment(newdata = train_data) %>% 
+  rmse(truth = avg_time_lap, estimate = .fitted) %>% 
+  mutate(model = 'Null Model')
+null_rmse
+```
+
+
+This is what I expected - the model estimate matches the mean in the train data. I now also have an RMSE to compare the other models to - they should all perform better than this. 
+
+### Spline Model
+
+Now it's time for the spline model. I will follow these steps: 
+
+  1) Create model specification
+  2) Create a workflow 
+  3) Create a tuning grid  
+  4) Tune the hyperparameters  
+  5) Autoplot the results 
+  6) Finalize the workflow
+  7) Fit the model to the training data 
+  8) Estimate model performance with RMSE 
+  9) Make diagnostic plots 
+
+```{r spline, cache=TRUE}
+# Model specs 
+mars_earth_spec <-
+  mars(prod_degree = tune()) %>%
+  set_engine('earth') %>%
+  set_mode('regression')
+
+# Create workflow 
+spline_wflow <- 
+  workflow() %>% 
+  add_model(mars_earth_spec) %>% 
+  add_recipe(lap_rec)
+
+# Create a tuning grid 
+spline_grid <- grid_regular(parameters(mars_earth_spec))
+
+# Tune hyperparameters 
+spline_res <- spline_wflow %>% 
+  tune_grid(resamples = cv5,
+            grid = spline_grid,
+            metrics = metric_set(rmse),
+            control = control_grid(verbose = T))
+
+# Autoplot results
+spline_res %>% autoplot()
+
+# Finalize workflow 
+best_spline <- spline_res %>% #choose best hyperparameters 
+  select_best() 
+best_spline_wflow <- spline_wflow %>% #finalize with chosen hyperparameters 
+  finalize_workflow(best_spline)
+
+# Fit to training data 
+best_spline_wflow_fit <- best_spline_wflow %>% 
+  fit(data = train_data)
+
+# Estimate model performance with RMSE 
+aug_best_spline <- augment(best_spline_wflow_fit, new_data = train_data)
+spline_rmse <-
+   aug_best_spline %>% 
+  rmse(truth = avg_time_lap, .pred) %>% 
+  mutate(model = "Spline")
+spline_rmse  
+
+# Diagnostic plots 
+## Plot actual vs predicted 
+ggplot(data = aug_best_spline, aes(x = .pred, y = avg_time_lap)) +
+  geom_point()
+
+## Plot residuals vs fitted 
+aug_best_spline %>% 
+  mutate(resid = avg_time_lap - .pred) %>% 
+  ggplot(aes(x = .pred, y = resid)) +
+  geom_point()
+```
+
+This model seems to have decent performance. The RMSE is much lower than in the null model, the plot of the actual vs predicted value shows pretty similar values, and there doesn't appear to be any nonconstant variance. 
+
+### Tree 
+
+For the tree model, I will follow the same steps as above: 
+
+  1) Create model specification
+  2) Create a workflow 
+  3) Create a tuning grid  
+  4) Tune the hyperparameters  
+  5) Autoplot the results 
+  6) Finalize the workflow
+  7) Fit the model to the training data 
+  8) Estimate model performance with RMSE 
+  9) Make diagnostic plots 
+
+
+```{r tree, cache=TRUE}
+# Create model spec 
+decision_tree_rpart_spec <-
+  decision_tree(tree_depth = tune(), 
+                min_n = tune(), 
+                cost_complexity = tune()) %>%
+  set_engine('rpart') %>%
+  set_mode('regression')
+
+# Create workflow 
+tree_wflow <- workflow() %>% 
+  add_model(decision_tree_rpart_spec) %>% 
+  add_recipe(lap_rec)
+
+# Create tuning grid 
+tree_grid <- grid_regular(parameters(decision_tree_rpart_spec))
+
+# Tune hyperparameters 
+tree_res <- tree_wflow %>% 
+  tune_grid(resamples = cv5,
+            grid = tree_grid,
+            metrics = metric_set(rmse),
+            control = control_grid(verbose = TRUE))
+
+# Autoplot results 
+tree_res %>% autoplot()
+
+# Finalize workflow 
+best_tree <- tree_res %>% #select best hyperparameter combination 
+  select_best()
+best_tree_wflow <- tree_wflow %>% 
+  finalize_workflow(best_tree)
+
+# Fit to training data 
+best_tree_wflow_fit <- best_tree_wflow %>% 
+  fit(data = train_data)
+
+# Estimate model performance with RMSE 
+aug_best_tree <- augment(best_tree_wflow_fit, new_data = train_data)
+tree_rmse <- 
+  aug_best_tree %>% 
+  rmse(truth = avg_time_lap, .pred) %>% 
+  mutate(model = "Tree")
+gt::gt(tree_rmse)
+
+# Diagnostic plots 
+## Plot actual vs predicted 
+ggplot(data = aug_best_tree, aes(x = .pred, y = avg_time_lap)) +
+  geom_point()
+
+## Plot residuals vs fitted 
+aug_best_tree %>% 
+  mutate(resid = avg_time_lap - .pred) %>% 
+  ggplot(aes(x = .pred, y = resid)) +
+  geom_point()
+```
+
+This model seems to perform even better than the spline model. The RMSE is lower and the plot of actual vs predicted values has even less variance. However, the plot of residuals vs predicted values does seem to have nonconstant variance, with increased variance towards the center. 
+
+### Random Forest 
+```{r random forest, cache=TRUE}
+# Model spec 
+rand_forest_ranger_spec <-
+  rand_forest(mtry = tune(), min_n = tune()) %>%
+  set_engine('ranger') %>%
+  set_mode('regression')
+
+# Create workflow 
+forest_wflow <- workflow() %>% 
+  add_model(rand_forest_ranger_spec) %>% 
+  add_recipe(lap_rec)
+
+# Create tuning grid and tune hyperparameters 
+forest_res <- forest_wflow %>% 
+  tune_grid(resample = cv5,
+            grid = 25,
+            metrics = metric_set(rmse),
+            control = control_grid(save_pred = T, verbose = T))
+
+# Autoplot results 
+forest_res %>% autoplot()
+
+# Finalize workflow 
+best_forest <- forest_res %>% #select best hyperparameter combination 
+  select_best()
+best_forest_wflow <- forest_wflow %>% 
+  finalize_workflow(best_forest)
+
+# Fit to training data 
+best_forest_wflow_fit <- best_forest_wflow %>% 
+  fit(data = train_data)
+
+# Estimate model performance with RMSE 
+aug_best_forest <- augment(best_forest_wflow_fit, new_data = train_data)
+forest_rmse <- 
+  aug_best_forest %>% 
+  rmse(truth = avg_time_lap, .pred) %>% 
+  mutate(model = "Random Forest")
+gt::gt(forest_rmse)
+
+# Diagnostic plots 
+## Plot actual vs predicted 
+ggplot(data = aug_best_forest, aes(x = .pred, y = avg_time_lap)) +
+  geom_point()
+
+## Plot residuals vs fitted 
+aug_best_forest %>% 
+  mutate(resid = avg_time_lap - .pred) %>% 
+  ggplot(aes(x = .pred, y = resid)) +
+  geom_point()
+```
+
+This model appears to be a good medium between the previous two. The RMSE is between the previous two, the actual vs predicted plot looks good, and the variance seems more constant. 
+
+### SVM
+  
+```{r svm, cache=TRUE}
+# Model spec
+svm_poly_kernlab_spec <-
+  svm_poly(cost = tune(), 
+           degree = tune(), 
+           scale_factor = tune(),
+           margin = tune()) %>%
+  set_engine('kernlab') %>%
+  set_mode('regression')
+
+# Create workflow 
+svm_wflow <- workflow() %>% 
+  add_model(svm_poly_kernlab_spec) %>% 
+  add_recipe(lap_rec)
+
+# Create tuning grid 
+svm_grid <- grid_regular(parameters(svm_poly_kernlab_spec))
+
+# Tune hyperparameters 
+svm_res <- svm_wflow %>% 
+  tune_grid(resamples = cv5,
+            grid = svm_grid,
+            metrics = metric_set(rmse),
+            control = control_grid(verbose = TRUE))
+
+# Autoplot results 
+svm_res %>% autoplot()
+
+# Finalize workflow 
+best_svm <- svm_res %>% #select best hyperparameter combination 
+  select_best()
+best_svm_wflow <- svm_wflow %>% 
+  finalize_workflow(best_svm)
+
+# Fit to training data 
+best_svm_wflow_fit <- best_svm_wflow %>% 
+  fit(data = train_data)
+
+# Estimate model performance with RMSE 
+aug_best_svm <- augment(best_svm_wflow_fit, new_data = train_data)
+svm_rmse <- 
+  aug_best_svm %>% 
+  rmse(truth = avg_time_lap, .pred) %>% 
+  mutate(model = "SVM")
+gt::gt(svm_rmse)
+
+# Diagnostic plots 
+## Plot actual vs predicted 
+ggplot(data = aug_best_svm, aes(x = .pred, y = avg_time_lap)) +
+  geom_point()
+
+## Plot residuals vs fitted 
+aug_best_svm %>% 
+  mutate(resid = avg_time_lap - .pred) %>% 
+  ggplot(aes(x = .pred, y = resid)) +
+  geom_point()
+```
+
+The diagnostic plots here look good, but the RMSE is higher than the last couple of models, so this may not be the best option. 
+
+### Model Selection 
+
+Before deciding on my final model, I want to look at the RMSEs of all the models  again. 
+
+```{r}
+# View RMSEs of all models 
+knitr::kable(rbind(null_rmse, spline_rmse, tree_rmse, forest_rmse, svm_rmse))
+```
+
+If I base my decision solely on the RMSE, the best model would the tree model. However, I think I want to go  with the random forest. The RMSE is not all that different between the two, and the diagnostic plots looked better for the random forest. 
+
+### Final Model
+
+It's time to fit the final model and see how it performs! I'll use the same metric and diagnostic plots I've been using the whole time. 
+
+```{r final fitting}
+# Final workflow 
+forest_final <- best_forest_wflow %>% 
+  last_fit(data_split, metrics = metric_set(rmse)) 
+
+# Include predicted probabilities
+aug_final_forest <- augment(forest_final)
+
+# Estimate model performance with RMSE
+forest_final %>% 
+  collect_metrics() %>% 
+  select(-.config) %>% 
+  gt::gt()
+
+# Make diagnostic plots 
+## Plot actual vs fitted  
+ggplot(data = aug_final_forest, aes(x = .pred, y = avg_time_lap)) +
+  geom_point()
+
+## Plot residuals vs fitted 
+aug_final_forest %>% 
+  mutate(resid = avg_time_lap - .pred) %>% 
+  ggplot(aes(x = .pred, y = resid)) +
+  geom_point()
+```
+
+This performance isn't too bad. As expected, the RMSE is higher than in the training model, but it's not astronomical, and the diagnostic plots still look pretty good! Fitted and predicted values are similar, and there doesn't seem to be nonconstant variance. 
+
+## Discussion 
+
+This was an interesting exercise, and great practice in a start-to-finish analysis. We started with unprocessed data, cleaned and explored it, determined a question, fit multiple models to training data to determine the best one, and fit the test data to the final model. I was surprised at how well all the models fit, particularly when I went in (and honestly, finished) with so little understanding of the data. The random forest seemed to do a good job of predicting the outcome in both the train and test data.  I wish this data set came with more information about factors like track materials, angle/amount of decline in the track, and anything else that may have impacted the speed. I think we could have done some more with that information, but overall, I was pleasantly surprised by the results of this exercise! 

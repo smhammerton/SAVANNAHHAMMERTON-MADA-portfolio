@@ -24,9 +24,10 @@ I have been working with Dr. Handel for the past few months on some norovirus re
 ### Fun Facts  
 Outside of school and work, I try to keep up hobbies to take healthy breaks! I love crafting, and usually have some knitting, crocheting, or sewing project that I'm working on. I also try to spend as much time outside as I can, hiking, running, or walking (with my dog, Shadow!)
 
+```{r echo=FALSE, fig.cap="In Geneva, Switzerland in February 2020 during a trip to Germany and Switzerland to see family. I think this is the most beautiful place I've ever been!"}
+knitr::include_graphics(here::here('images', 'IMG_5631.jpg'))
+```
 
-
-![*In Geneva, Switzerland in February 2020 during a trip to Germany and Switzerland to see family. I think this is the most beautiful place I've ever been!*](here::here('images', 'IMG_5631.jpg'){width=75% height=75%}
 
 ### What I Hope to Learn in this Course 
 I have a lot to learn in both working with R and GitHub as well as with data analysis in general. I hope to use this course to gain a better understanding of how to work with data in a efficient, accurate, reproducible way. While I've learned a fair amount about how things should work theoretically, I'm looking forward to getting a better understanding of practical applications! 
