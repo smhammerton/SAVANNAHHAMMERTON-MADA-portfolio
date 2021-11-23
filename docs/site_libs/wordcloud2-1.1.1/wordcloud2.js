@@ -2,7 +2,7 @@
  * wordcloud2.js
  * http://timdream.org/wordcloud2.js/
  *
- * Copyright 2011 - 2013 Tim Chien
+ * Copyright 2011 - 2019 Tim Guan-tin Chien and contributors.
  * Released under the MIT license
  */
 
@@ -96,6 +96,9 @@ if (!window.clearImmediate) {
     }
 
     var ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return false;
+    }
     if (!ctx.getImageData) {
       return false;
     }
@@ -186,6 +189,8 @@ if (!window.clearImmediate) {
       backgroundColor: '#fff',  // opaque white = rgba(255, 255, 255, 1)
 
       gridSize: 8,
+      drawOutOfBound: false,
+      shrinkToFit: false,
       origin: null,
 
       drawMask: false,
@@ -198,6 +203,7 @@ if (!window.clearImmediate) {
 
       minRotation: - Math.PI / 2,
       maxRotation: Math.PI / 2,
+      rotationSteps: 0,
 
       shuffle: true,
       rotateRatio: 0.1,
@@ -256,13 +262,23 @@ if (!window.clearImmediate) {
         */
 
         case 'diamond':
-        case 'square':
           // http://www.wolframalpha.com/input/?i=plot+r+%3D+1%2F%28cos%28mod+
           // %28t%2C+PI%2F2%29%29%2Bsin%28mod+%28t%2C+PI%2F2%29%29%29%2C+t+%3D
           // +0+..+2*PI
           settings.shape = function shapeSquare(theta) {
             var thetaPrime = theta % (2 * Math.PI / 4);
             return 1 / (Math.cos(thetaPrime) + Math.sin(thetaPrime));
+          };
+          break;
+
+        case 'square':
+          // http://www.wolframalpha.com/input/?i=plot+r+%3D+min(1%2Fabs(cos(t
+          // )),1%2Fabs(sin(t)))),+t+%3D+0+..+2*PI
+          settings.shape = function shapeSquare(theta) {
+            return Math.min(
+              1 / Math.abs(Math.cos(theta)),
+              1 / Math.abs(Math.sin(theta))
+            );
           };
           break;
 
@@ -318,6 +334,7 @@ if (!window.clearImmediate) {
 
     /* normalize rotation settings */
     var rotationRange = Math.abs(settings.maxRotation - settings.minRotation);
+    var rotationSteps = Math.abs(Math.floor(settings.rotationSteps));
     var minRotation = Math.min(settings.maxRotation, settings.minRotation);
 
     /* information/object available to all functions, set when start() */
@@ -355,6 +372,12 @@ if (!window.clearImmediate) {
           getTextColor = settings.color;
         }
         break;
+    }
+
+    /* function for getting the font-weight of the text */
+    var getTextFontWeight;
+    if (typeof settings.fontWeight === 'function') {
+      getTextFontWeight = settings.fontWeight;
     }
 
     /* function for getting the classes of the text */
@@ -476,7 +499,15 @@ if (!window.clearImmediate) {
         return minRotation;
       }
 
-      return minRotation + Math.random() * rotationRange;
+      if (rotationSteps > 0) {
+        // Min rotation + zero or more steps * span of one step
+        return minRotation +
+          Math.floor(Math.random() * rotationSteps) *
+          rotationRange / (rotationSteps - 1);
+      }
+      else {
+        return minRotation + Math.random() * rotationRange;
+      }
     };
 
     var getTextInfo = function getTextInfo(word, weight, rotateDeg) {
@@ -503,10 +534,18 @@ if (!window.clearImmediate) {
         })();
       }
 
+      // Get fontWeight that will be used to set fctx.font
+      var fontWeight;
+      if (getTextFontWeight) {
+        fontWeight = getTextFontWeight(word, weight, fontSize);
+      } else {
+        fontWeight = settings.fontWeight;
+      }
+
       var fcanvas = document.createElement('canvas');
       var fctx = fcanvas.getContext('2d', { willReadFrequently: true });
 
-      fctx.font = settings.fontWeight + ' ' +
+      fctx.font = fontWeight + ' ' +
         (fontSize * mu).toString(10) + 'px ' + settings.fontFamily;
 
       // Estimate the dimension of the text with measureText().
@@ -559,7 +598,7 @@ if (!window.clearImmediate) {
 
       // Once the width/height is set, ctx info will be reset.
       // Set it again here.
-      fctx.font = settings.fontWeight + ' ' +
+      fctx.font = fontWeight + ' ' +
         (fontSize * mu).toString(10) + 'px ' + settings.fontFamily;
 
       // Fill the text into the fcanvas.
@@ -664,7 +703,14 @@ if (!window.clearImmediate) {
         var px = gx + occupied[i][0];
         var py = gy + occupied[i][1];
 
-        if (px >= ngx || py >= ngy || px < 0 || py < 0 || !grid[px][py]) {
+        if (px >= ngx || py >= ngy || px < 0 || py < 0) {
+          if (!settings.drawOutOfBound) {
+            return false;
+          }
+          continue;
+        }
+
+        if (!grid[px][py]) {
           return false;
         }
       }
@@ -679,15 +725,21 @@ if (!window.clearImmediate) {
       var color;
       if (getTextColor) {
         color = getTextColor(word, weight, fontSize, distance, theta);
-      } else if (settings.color instanceof Array) {
-        color = settings.color.shift() || 'black'; // pass a array in setting, default 'black'
       } else {
         color = settings.color;
       }
 
+      // get fontWeight that will be used to set ctx.font and font style rule
+      var fontWeight;
+      if (getTextFontWeight) {
+        fontWeight = getTextFontWeight(word, weight, fontSize);
+      } else {
+        fontWeight = settings.fontWeight;
+      }
+
       var classes;
       if (getTextClasses) {
-        classes = getTextClasses(word, weight, fontSize, distance, theta);
+        classes = getTextClasses(word, weight, fontSize);
       } else {
         classes = settings.classes;
       }
@@ -710,7 +762,7 @@ if (!window.clearImmediate) {
           ctx.save();
           ctx.scale(1 / mu, 1 / mu);
 
-          ctx.font = settings.fontWeight + ' ' +
+          ctx.font = fontWeight + ' ' +
                      (fontSize * mu).toString(10) + 'px ' + settings.fontFamily;
           ctx.fillStyle = color;
 
@@ -753,7 +805,7 @@ if (!window.clearImmediate) {
           var styleRules = {
             'position': 'absolute',
             'display': 'block',
-            'font': settings.fontWeight + ' ' +
+            'font': fontWeight + ' ' +
                     (fontSize * info.mu) + 'px ' + settings.fontFamily,
             'left': ((gx + info.gw / 2) * g + info.fillTextOffsetX) + 'px',
             'top': ((gy + info.gh / 2) * g + info.fillTextOffsetY) + 'px',
@@ -831,8 +883,14 @@ if (!window.clearImmediate) {
 
       var i = occupied.length;
       while (i--) {
-        fillGridAt(gx + occupied[i][0], gy + occupied[i][1],
-                   drawMask, dimension, item);
+        var px = gx + occupied[i][0];
+        var py = gy + occupied[i][1];
+
+        if (px >= ngx || py >= ngy || px < 0 || py < 0) {
+          continue;
+        }
+
+        fillGridAt(px, py, drawMask, dimension, item);
       }
 
       if (drawMask) {
@@ -867,12 +925,15 @@ if (!window.clearImmediate) {
         return false;
       }
 
-      // Skip the loop if we have already know the bounding box of
+      // If drawOutOfBound is set to false,
+      // skip the loop if we have already know the bounding box of
       // word is larger than the canvas.
-      var bounds = info.bounds;
-      if ((bounds[1] - bounds[3] + 1) > ngx ||
-        (bounds[2] - bounds[0] + 1) > ngy) {
-        return false;
+      if (!settings.drawOutOfBound) {
+        var bounds = info.bounds;
+        if ((bounds[1] - bounds[3] + 1) > ngx ||
+          (bounds[2] - bounds[0] + 1) > ngy) {
+          return false;
+        }
       }
 
       // Determine the position to put the text by
@@ -921,24 +982,34 @@ if (!window.clearImmediate) {
           return true;
         }
       }
+      if (settings.shrinkToFit) {
+        if (Array.isArray(item)) {
+          item[1] = item[1] * 3 / 4;
+        } else {
+          item.weight = item.weight * 3 / 4;
+        }
+        return putWord(item);
+      }
       // we tried all distances but text won't fit, return false
       return false;
     };
 
     /* Send DOM event to all elements. Will stop sending event and return
        if the previous one is canceled (for cancelable events). */
-    var sendEvent = function sendEvent(type, cancelable, detail) {
+    var sendEvent = function sendEvent(type, cancelable, details) {
       if (cancelable) {
         return !elements.some(function(el) {
-          var evt = document.createEvent('CustomEvent');
-          evt.initCustomEvent(type, true, cancelable, detail || {});
-          return !el.dispatchEvent(evt);
+          var event = new CustomEvent(type, {
+            detail: details || {}
+          });
+          return !el.dispatchEvent(event);
         }, this);
       } else {
         elements.forEach(function(el) {
-          var evt = document.createEvent('CustomEvent');
-          evt.initCustomEvent(type, true, cancelable, detail || {});
-          el.dispatchEvent(evt);
+          var event = new CustomEvent(type, {
+            detail: details || {}
+          });
+          el.dispatchEvent(event);
         }, this);
       }
     };
@@ -950,12 +1021,12 @@ if (!window.clearImmediate) {
       var canvas = elements[0];
 
       if (canvas.getContext) {
-        ngx = Math.floor(canvas.width / g);
-        ngy = Math.floor(canvas.height / g);
+        ngx = Math.ceil(canvas.width / g);
+        ngy = Math.ceil(canvas.height / g);
       } else {
         var rect = canvas.getBoundingClientRect();
-        ngx = Math.floor(rect.width / g);
-        ngy = Math.floor(rect.height / g);
+        ngx = Math.ceil(rect.width / g);
+        ngy = Math.ceil(rect.height / g);
       }
 
       // Sending a wordcloudstart event which cause the previous loop to stop.
@@ -987,6 +1058,7 @@ if (!window.clearImmediate) {
           } else {
             el.textContent = '';
             el.style.backgroundColor = settings.backgroundColor;
+            el.style.position = 'relative';
           }
         });
 
@@ -1060,10 +1132,6 @@ if (!window.clearImmediate) {
 
         if (settings.click) {
           canvas.addEventListener('click', wordcloudclick);
-          canvas.addEventListener('touchstart', wordcloudclick);
-          canvas.addEventListener('touchend', function (e) {
-            e.preventDefault();
-          });
           canvas.style.webkitTapHighlightColor = 'rgba(0, 0, 0, 0)';
         }
 
@@ -1139,6 +1207,7 @@ if (!window.clearImmediate) {
 
   // Expose the library as an AMD module
   if (typeof define === 'function' && define.amd) {
+    global.WordCloud = WordCloud;
     define('wordcloud', [], function() { return WordCloud; });
   } else if (typeof module !== 'undefined' && module.exports) {
     module.exports = WordCloud;
